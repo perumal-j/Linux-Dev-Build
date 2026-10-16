@@ -1,0 +1,225 @@
+---
+- name: "Check if OpenJDK-21 exists"
+  stat: 
+    path: "/tmp/openjdk-latest.tar.gz"
+  register: openjdk_21
+
+- name: "Copying downloadopenjdk.sh"
+  copy:
+    src: "downloadopenjdk.sh"
+    dest: "/tmp/downloadopenjdk.sh"
+    mode: 0755
+  when: not openjdk_21.stat.exists
+
+- name: "Downloading OpenJDK-21"
+  shell: "/tmp/downloadopenjdk.sh"
+  when: not openjdk_21.stat.exists
+  changed_when: false
+
+- name: "Check the existence of /usr/lib/jvm"
+  stat:
+    path: /usr/lib/jvm
+  register: jvm_dir
+
+- name: "Create /usr/lib/jvm"
+  file:
+    path: /usr/lib/jvm
+    state: directory
+    mode: 0755
+  become: true
+  become_method: sudo
+  when: not jvm_dir.stat.exists
+
+- name: "Extracting OpenJDK-21"
+  unarchive:
+    src: "/tmp/openjdk-latest.tar.gz"
+    dest: "/usr/lib/jvm/"
+  become: true
+  become_method: sudo
+
+- name: "Get All Open JDK Installations"
+  shell: "ls -d /usr/lib/jvm/jdk-21* | sort -V"
+  register: "jdk_installations"
+  changed_when: false
+
+- name: "Set Latest Open JDK Installation"
+  set_fact:
+    latest_jdk: "{{ jdk_installations.stdout_lines | last }}"
+
+- name: "Remove Older Open JDK installations"
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ jdk_installations.stdout_lines }}"
+  when: "item != latest_jdk"
+  become: true
+  become_method: sudo
+
+- name: "Purging Older Burpsuite"
+  package:
+    name:
+      - burpsuite
+    state: absent
+  become: true
+  become_method: sudo
+
+- name: "Check the presence of /tmp/burpsuite-releases-metadata.json"
+  stat:
+    path: "/tmp/burpsuite-releases-metadata.json"
+  register: burpsuite_metadata
+  changed_when: false
+  
+- name: "Downloading Burpsuite releases metadata"
+  get_url:
+    url: "https://portswigger.net/burp/releases/data"
+    dest: "/tmp/burpsuite-releases-metadata.json"
+  register: burpsuite_metadata
+  become: true
+  become_method: sudo
+  when: not burpsuite_metadata.stat.exists
+
+- name: "Read burpsuite-releases-metadata.json from disk"
+  slurp:
+    src: /tmp/burpsuite-releases-metadata.json
+  register: burpsuite_release_file
+  changed_when: false
+
+- name: "Parse Burpsuite Release JSON"
+  set_fact:
+    burpsuitie_release_json: "{{ burpsuite_release_file.content | b64decode | from_json }}"
+  changed_when: false
+
+- name: "Extract latest stable Desktop release"
+  set_fact:
+    burpsuite_latest_version: "{{ (burpsuitie_release_json.ResultSet.Results | selectattr('releaseChannels', 'contains', 'Stable') | selectattr('categories', 'contains', 'Desktop') | first).version }}"
+
+- name: "Check the existence of /opt/current_versions directory"
+  stat:
+    path: "/opt/current_versions"
+  register: current_versions
+  changed_when: false
+
+- name: "Creating /opt/current_versions directory"
+  file:
+    path: "/opt/current_versions"
+    state: directory
+    mode: 0755
+  become: true
+  become_method: sudo
+  when: not current_versions.stat.exists
+
+- name: "Presence of /opt/current_versions/burpsuite_current_version.txt"
+  stat:
+    path: "/opt/current_versions/burpsuite_current_version.txt"
+  register: burpsuite_version_file
+  changed_when: false
+
+- name: "Writing Current Version to file /opt/current_versions/burpsuite_current_version.txt"
+  copy:
+    dest: "/opt/current_versions/burpsuite_current_version.txt"
+    content: "{{ burpsuite_latest_version }}"
+    mode: '0644'
+  become: true
+  become_method: sudo
+  when: not burpsuite_version_file.stat.exists
+
+- name: "Read Current Version from file /opt/current_versions/burpsuite_current_version.txt"
+  set_fact:
+    burpsuite_current_version: "{{ lookup('file', '/opt/current_versions/burpsuite_current_version.txt') }}"
+  when: burpsuite_version_file.stat.exists
+
+- name: "Compare burpsuite_current_version with burpsuite_latest_version"
+  set_fact:
+    burpsuite_update_required: "{{ burpsuite_current_version != burpsuite_latest_version }}"
+  when: burpsuite_version_file.stat.exists
+
+- name: "Print burpsuite_update_required status"
+  debug:
+    msg: "{{ burpsuite_update_required }}"
+
+- name: "Downloading latest Burpsuite"
+  get_url:
+    url: "https://portswigger.net/burp/releases/startdownload?product=desktop&version={{ burpsuite_latest_version }}&type=Jar"
+    dest: "/opt/burpsuite.jar"
+    force: yes
+  become: true
+  become_method: sudo
+  when: burpsuite_update_required
+
+- name: "Store the Burpsuite latest version in the current version file"
+  copy:
+    dest: "/opt/current_versions/burpsuite_current_version.txt"
+    content: "{{ burpsuite_latest_version }}"
+    mode: "0644"
+  become: true
+  become_method: sudo
+  when: burpsuite_update_required
+
+- name: "Creating /usr/bin/burpsuite"
+  copy:
+    src: "burpsuite"
+    dest: "/usr/bin/burpsuite"
+    mode: 0755
+  become: true
+  become_method: sudo
+
+- name: "Check if BurpSuiteCA.der exists"
+  stat:
+    path: /usr/local/share/ca-certificates/BurpSuiteCA.der
+  register: burpsuite_cert
+
+- name: "Copying downloadburpcert.sh"
+  copy:
+    src: "downloadburpcert.sh"
+    dest: "/tmp/downloadburpcert.sh"
+    mode: 0755
+  when: not burpsuite_cert.stat.exists
+
+- name: "Executing Bash Script Download CA Certificate"
+  shell: "/tmp/downloadburpcert.sh"
+  when: not burpsuite_cert.stat.exists
+
+- name: "Copying CA Certificate to /usr/local/share/ca-certificates"
+  copy:
+    src: /tmp/cacert.der
+    dest: /usr/local/share/ca-certificates/BurpSuiteCA.der 
+    mode: 0644
+  become: true
+  become_method: sudo
+  when: not burpsuite_cert.stat.exists
+
+- name: "Check PID of Running Headless BurpSuite"
+  shell: "lsof -i :8080 -t"
+  register: burpsuite_pid
+  changed_when: false
+  failed_when: false
+
+- name: "Killing Headless BurpSuite"
+  shell: "kill -9 {{ burpsuite_pid.stdout }}"
+  when: burpsuite_pid.stdout != ""
+  ignore_errors: true
+  become: true
+  become_method: sudo
+
+- name: "Create directory for Burp Suite extras"
+  file:
+    path: "{{ burpsuite_extras_dir }}"
+    state: directory
+    mode: 0755
+  become: true
+  become_method: sudo
+
+- name: "Download jar files to burpsuite extras directory"
+  get_url:
+    url: "{{ item.value.url }}"
+    dest: "{{ burpsuite_extras_dir }}/{{ item.value.jar }}"
+    checksum: "{{ item.value.checksum }}"
+    mode: 0644
+  become: true
+  become_method: sudo
+  loop: "{{ lookup('dict', burpsuite_extras_jars) }}"
+
+- name: "Copying Burpsuite Community Config Template"
+  template:
+    src: "UserConfigCommunity.json.j2"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.BurpSuite/UserConfigCommunity.json"

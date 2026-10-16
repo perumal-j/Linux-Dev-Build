@@ -1,0 +1,52 @@
+---
+- name: Download Brave Browser keyring
+  get_url:
+    url: https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
+    dest: /usr/share/keyrings/brave-browser-archive-keyring.gpg
+    mode: '0644'
+  become: true
+  become_method: sudo
+
+- name: Download Brave Browser repository sources file
+  get_url:
+    url: https://brave-browser-apt-release.s3.brave.com/brave-browser.sources
+    dest: /etc/apt/sources.list.d/brave-browser-release.sources
+    mode: '0644'
+  become: true
+  become_method: sudo
+
+- name: Install Brave Browser
+  apt:
+    name: brave-browser
+    state: present
+    update_cache: yes  # This replaces 'sudo apt update'
+  become: true
+  become_method: sudo
+
+- name: "Create Brave policy dir"
+  file:
+    path: /etc/brave/policies/managed
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  become_method: sudo
+
+- name: Read Burp CA as base64 (DER, single line)
+  slurp:
+    src: /usr/local/share/ca-certificates/BurpSuiteCA.der
+  register: burp_ca
+
+- name: Deploy Brave policy
+  template:
+    src: brave-policy.json.j2
+    dest: /etc/brave/policies/managed/policy.json
+    owner: root
+    group: root
+    mode: "0644"
+    validate: python3 -m json.tool %s
+  vars:
+    burp_ca_b64: "{{ burp_ca.content }}"
+  become: true
+  become_method: sudo

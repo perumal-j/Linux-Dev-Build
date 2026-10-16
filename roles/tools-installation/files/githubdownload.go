@@ -1,0 +1,473 @@
+// Program to access GitHub releases page and print beautified JSON response
+
+package main
+
+import (
+	"archive/tar"   // for untar files
+	"archive/zip"   // for unzipping files
+	"bytes"         // for handling byte buffers
+	"compress/gzip" // for gzip compression
+	"encoding/json" // for regular expressions
+	"fmt"           // for formatted I/O
+	"io"            // for reading response body
+	"net/http"      // for HTTP requests
+	"os"            // for file operations
+	"path/filepath" // for file path manipulation
+	"regexp"        // for unzipping files
+	"strings"       // for string manipulation
+)
+
+func GetGithubReleasesLatest(repo string) string {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return ""
+	}
+
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		req.Header.Set("Authorization", "token "+token)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("GitHub API returned status %d\n", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(body))
+		return ""
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return ""
+	}
+
+	return string(body)
+}
+
+// Get tag_name value from github releases json response
+func GetGithubReleaseTagName(meta_data string) string {
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(meta_data), &data)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return ""
+	}
+	tag_name, ok := data["tag_name"].(string)
+	if !ok {
+		fmt.Println("tag_name not found in JSON data")
+	}
+	return tag_name
+}
+
+// ReadFileAsString reads the content of a .txt file and returns it as a string
+func ReadFileAsString(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Read the entire file
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func GetGithubReleaseUrls(meta_data string, regex string) []string {
+	// Get URLs of all release files that match the regex
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(meta_data), &data)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return nil
+	}
+	// Get the assets array from the JSON data
+	assets, ok := data["assets"].([]interface{})
+	if !ok {
+		fmt.Println("assets not found in JSON data")
+	}
+	// Iterate over the assets and find all that match the regex
+	var matchedUrls []string
+	for _, asset := range assets {
+		assetMap, ok := asset.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		browser_download_url, ok := assetMap["browser_download_url"].(string)
+		if !ok {
+			continue
+		}
+		// Check if the asset name matches the regex
+		if matched, err := regexp.MatchString(regex, browser_download_url); err == nil && matched {
+			// Add the URL of the matching asset to the list
+			matchedUrls = append(matchedUrls, browser_download_url)
+		}
+	}
+
+	if len(matchedUrls) == 0 {
+		fmt.Println("no matching assets found")
+	}
+
+	return matchedUrls
+}
+
+func DownloadToBuffer(url string) (*bytes.Buffer, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to fetch URL: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Bad Status Code: %d", resp.StatusCode)
+	}
+
+	var buff bytes.Buffer
+	_, err = io.Copy(&buff, resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read the response body: %v", err)
+	}
+
+	return &buff, nil
+}
+
+func ExtractFileNameFromURL(url string) string {
+	// Extract the file name from the URL
+	re := regexp.MustCompile(`[^/]+$`)
+	fileName := re.FindString(url)
+	if fileName == "" {
+		fmt.Println("failed to extract file name from URL")
+	}
+	return fileName
+}
+
+func GzipCheck(compressedData []byte) string {
+
+	if len(compressedData) < 10 {
+		fmt.Println("not a gzip file")
+		return ""
+	}
+	// Check the gzip header
+	header := compressedData[:10]
+	// Check the gzip magic number
+
+	if !bytes.HasPrefix(header, []byte{0x1f, 0x8b}) {
+		// Gzip file
+		fmt.Println("not a gzip file")
+	}
+
+	data := compressedData[10:]
+	nullIndex := bytes.IndexByte(data, 0)
+	if nullIndex == -1 {
+		fmt.Println("not a gzip file name")
+		return ""
+	}
+	// Extract the file name
+	fileNameBytes := data[:nullIndex]
+	fileName := string(fileNameBytes)
+	return fileName
+}
+
+func ExtractGz(compressedData []byte, output_directory string) error {
+
+	var name string
+	name = GzipCheck(compressedData)
+
+	// Decompress the data
+	reader, err := gzip.NewReader(bytes.NewReader(compressedData))
+	if err != nil {
+		fmt.Println("Error creating gzip reader:", err)
+		return err
+	}
+	defer reader.Close()
+
+	// Create the output file
+	outputFile, err := os.Create(output_directory + "/" + name)
+	if err != nil {
+		fmt.Println("Error creating output file:", err)
+		return err
+	}
+	defer outputFile.Close()
+
+	// Write the decompressed data to the output file
+	_, err = io.Copy(outputFile, reader)
+	if err != nil {
+		fmt.Println("Error writing to output file:", err)
+		return err
+	}
+	return nil
+}
+
+// ExtractTarGz decompresses a gzipped tarball (.tar.gz / .tgz) and extracts its contents
+func ExtractTarGz(compressedData []byte, output_directory string) error {
+	reader := bytes.NewReader(compressedData)
+
+	gzipReader, err := gzip.NewReader(reader)
+	if err != nil {
+		fmt.Println("Error creating gzip reader:", err)
+		return err
+	}
+	defer gzipReader.Close()
+
+	return extractTarReader(gzipReader, output_directory)
+}
+
+// ExtractTar extracts a plain (non-gzipped) .tar archive
+func ExtractTar(data []byte, output_directory string) error {
+	reader := bytes.NewReader(data)
+	return extractTarReader(reader, output_directory)
+}
+
+// extractTarReader does the actual tar extraction from any io.Reader
+func extractTarReader(r io.Reader, output_directory string) error {
+	tarReader := tar.NewReader(r)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break // End of archive
+		}
+		if err != nil {
+			fmt.Println("Error reading tar header:", err)
+			return err
+		}
+
+		target := filepath.Join(output_directory, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			// Create the target directory if it doesn't exist
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+
+			outputFile, err := os.Create(target)
+			if err != nil {
+				return err
+			}
+
+			_, err = io.Copy(outputFile, tarReader)
+			if err != nil {
+				fmt.Println("Error writing to output file:", err)
+				return err
+			}
+
+			outputFile.Close()
+
+			// Apply the file permissions from the tar header
+			if err := os.Chmod(target, os.FileMode(header.Mode)); err != nil {
+				return err
+			}
+		default:
+
+			fmt.Println("Unknown type:", header.Typeflag, header.Name)
+		}
+	}
+
+	return nil
+}
+
+func ExtractZip(compressedData []byte, output_directory string) error {
+	// Create a new zip reader
+	reader := bytes.NewReader(compressedData)
+	zipReader, err := zip.NewReader(reader, int64(len(compressedData)))
+	if err != nil {
+		fmt.Println("Error creating zip reader:", err)
+		return err
+	}
+
+	// Iterate through the files in the zip archive
+	for _, file := range zipReader.File {
+		target := filepath.Join(output_directory, file.Name)
+
+		if file.FileInfo().IsDir() {
+			// Create the directory if it doesn't exist
+			if err := os.MkdirAll(target, os.ModePerm); err != nil {
+				fmt.Println("Error creating directory:", err)
+				return err
+			}
+			continue
+		}
+
+		// Create the target directory if it doesn't exist
+		if err := os.MkdirAll(filepath.Dir(target), os.ModePerm); err != nil {
+			fmt.Println("Error creating directory:", err)
+			return err
+		}
+
+		outputFile, err := os.Create(target)
+		if err != nil {
+			fmt.Println("Error creating output file:", err)
+			return err
+		}
+
+		fileReader, err := file.Open()
+		if err != nil {
+			fmt.Println("Error opening file in zip:", err)
+			return err
+		}
+		defer fileReader.Close()
+
+		if _, err := io.Copy(outputFile, fileReader); err != nil {
+			fmt.Println("Error writing to output file:", err)
+			return err
+		}
+
+		outputFile.Close()
+
+		// apply the file permissions from the zip header
+		if err := os.Chmod(target, os.FileMode(file.Mode())); err != nil {
+			fmt.Println("Error setting file permissions:", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// SaveRaw writes the downloaded bytes to output_directory/fileName exactly as-is,
+// used for any file whose extension doesn't match a known archive format.
+func SaveRaw(data []byte, output_directory string, fileName string) error {
+	file, err := os.Create(filepath.Join(output_directory, fileName))
+	if err != nil {
+		fmt.Println("Error creating file:", err)
+		return err
+	}
+	defer file.Close()
+	_, err = io.Copy(file, bytes.NewReader(data))
+	if err != nil {
+		fmt.Println("Error copying file:", err)
+		return err
+	}
+	return nil
+}
+
+func EnsureDirectoryExists(path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// Create the directory
+		err := os.MkdirAll(path, 0755)
+		if err != nil {
+			fmt.Println("Error creating directory:", err)
+		}
+	}
+}
+
+// dispatch by file extension: recognized archive types get extracted,
+// everything else (whatever the regex matched) is saved as-is.
+func UnifiedExtractionByteStream(repo string, regex string, output_directory string) error {
+
+	EnsureDirectoryExists(output_directory)
+	meta_data := GetGithubReleasesLatest(repo)
+	browser_download_url := GetGithubReleaseUrls(meta_data, regex)
+
+	// Print each URL from the list
+	for _, url := range browser_download_url {
+
+		fmt.Println("Downloading:", url)
+
+		buffer, err := DownloadToBuffer(url)
+		if err != nil {
+			fmt.Println("Error Downloading the Buffer:", err)
+			continue
+		}
+
+		binaryName := ExtractFileNameFromURL(url)
+		lowerName := strings.ToLower(binaryName)
+
+		switch {
+		case strings.HasSuffix(lowerName, ".tar.gz"), strings.HasSuffix(lowerName, ".tgz"):
+			err = ExtractTarGz(buffer.Bytes(), output_directory)
+			if err != nil {
+				fmt.Println("Error Extracting Tar.Gz:", err)
+			}
+		case strings.HasSuffix(lowerName, ".tar"):
+			err = ExtractTar(buffer.Bytes(), output_directory)
+			if err != nil {
+				fmt.Println("Error Extracting Tar:", err)
+			}
+		case strings.HasSuffix(lowerName, ".zip"):
+			err = ExtractZip(buffer.Bytes(), output_directory)
+			if err != nil {
+				fmt.Println("Error Extracting Zip:", err)
+			}
+		case strings.HasSuffix(lowerName, ".gz"):
+			// plain gzip (single file), not a tarball
+			err = ExtractGz(buffer.Bytes(), output_directory)
+			if err != nil {
+				fmt.Println("Error Extracting Gz:", err)
+			}
+		default:
+			// Not a recognized archive extension: save the file as-is,
+			// whatever type it is (binary, script, txt, etc.)
+			err = SaveRaw(buffer.Bytes(), output_directory, binaryName)
+			if err != nil {
+				fmt.Println("Error Saving Raw File:", err)
+			}
+		}
+	}
+
+	file, err := os.Create(output_directory + "/tag_name.txt")
+	if err != nil {
+		fmt.Println("Error creating file:", err)
+		return err
+	}
+	defer file.Close()
+	_, err = io.Copy(file, bytes.NewReader([]byte(GetGithubReleaseTagName(meta_data))))
+	if err != nil {
+		fmt.Println("Error copying file:", err)
+		return err
+	}
+	return nil
+}
+
+func main() {
+	if len(os.Args) != 4 {
+		fmt.Println("Usage: go run githubdownload_byte_stream.go <repo> <regex> <output_directory>")
+		fmt.Println("For Example: go run githubdownload_byte_stream.go 'shadow1ng/fscan' 'fcan.exe' 'home/user/tools/fscan'")
+		return
+	}
+
+	repo := os.Args[1]
+	regex := os.Args[2]
+	output_directory := os.Args[3]
+
+	localTag, err := ReadFileAsString(output_directory + "/tag_name.txt")
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+
+	releasePage := GetGithubReleasesLatest(repo)
+	if releasePage == "" {
+		fmt.Println("Error:", err)
+	}
+
+	remoteTag := GetGithubReleaseTagName(releasePage)
+
+	if localTag == remoteTag {
+		fmt.Println("Latest version is already installed:", localTag)
+		return
+	}
+	if localTag != remoteTag {
+		UnifiedExtractionByteStream(repo, regex, output_directory)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+	}
+}

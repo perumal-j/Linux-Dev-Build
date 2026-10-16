@@ -1,0 +1,106 @@
+---
+- name: Remove Firefox Snap package
+  snap:
+    name: firefox
+    state: absent
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'aarch64'
+
+# - name: "Remove Firefox-esr APT package"
+#   apt:
+#     name: firefox-esr
+#     state: absent
+#   become: true
+#   become_method: sudo
+#   when: ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'aarch64'
+
+- name: Create directory for APT keyrings
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'aarch64'
+
+- name: Import Mozilla APT repository signing key
+  get_url:
+    url: https://packages.mozilla.org/apt/repo-signing-key.gpg
+    dest: /etc/apt/keyrings/packages.mozilla.org.asc
+    mode: '0644'
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' or ansible_facts['architecture']|lower == 'aarch64'
+
+- name: Add Mozilla APT repository (Deb822 format)
+  deb822_repository:
+    name: mozilla
+    types: deb
+    uris: https://packages.mozilla.org/apt
+    suites: mozilla
+    components: main
+    signed_by: /etc/apt/keyrings/packages.mozilla.org.asc
+    state: present
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' or ansible_facts['architecture']|lower == 'aarch64'
+
+- name: Set Firefox PPA priority (Prevent Ubuntu from reinstalling Snap)
+  copy:
+    dest: /etc/apt/preferences.d/mozilla
+    content: |
+      Package: *
+      Pin: origin packages.mozilla.org
+      Pin-Priority: 1000
+      Package: firefox*
+      Pin: release o=Ubuntu
+      Pin-Priority: -1
+    mode: '0644'
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'aarch64'
+
+- name: "Updating Apt Cache"
+  command: apt-get update
+  become: true
+  become_method: sudo
+  changed_when: false
+
+- name: "Install Firefox native package"
+  apt:
+    name: firefox
+    state: present
+    update_cache: yes
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' or ansible_facts['architecture']|lower == 'aarch64'
+
+- name: "Copying Firefox Policies"
+  template:
+    src: "firefox-policy.json.j2"
+    dest: "/usr/share/firefox-esr/distribution/policies.json" # Parrot
+    # dest: "/etc/firefox/policies/policies.json"
+  become: true
+  become_method: sudo
+  when: (ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'x86_64') or ansible_facts['architecture']|lower == 'aarch64'
+
+- name: "Ensure Firefox policies directory exists"
+  file:
+    path: "/etc/firefox/policies"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  when: ansible_facts['distribution']|lower == 'ubuntu' or ansible_facts['architecture']|lower == 'aarch64'
+
+- name: "Copying Firefox Policies"
+  template:
+    src: "firefox-policy.json.j2"
+    # dest: "/usr/share/firefox-esr/distribution/policies.json" # Parrot
+    dest: "/etc/firefox/policies/policies.json"
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' or ansible_facts['architecture']|lower == 'aarch64'
+ 

@@ -1,0 +1,35 @@
+---
+GitHubTools:
+  - name: mhtml-converter
+    url: "https://github.com/perumal-j/mhtml-converter"
+    destination: "/opt/mhtml-converter"
+
+UVtools:
+  - updog
+  - uploadserver
+  - wsgidav
+
+temp_bin_dir: "/tmp/uv-bin"
+target_bin_dir: "/usr/local/bin"
+
+temp_wsgi_dir: "/tmp/wsgidav-bin"
+
+PIPToolsGit:
+  - name: DonPAPI
+    url: "git+https://github.com/login-securite/DonPAPI"
+
+
+UVtoolsGit: 
+  - name: pwntools
+    url: "git+https://github.com/Gallopsled/pwntools"
+
+
+GitHubReleases:
+  # - repo: "jpillora/chisel"
+  #   regex: "linux_amd64.gz"
+  #   destination: "/opt/chisel"
+
+  # - repo: "jpillora/chisel"
+  #   regex: "windows_amd64.zip"
+  #   destination: "/opt/chisel"
+

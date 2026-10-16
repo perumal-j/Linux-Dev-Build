@@ -1,0 +1,26 @@
+---
+- name: "Removing Go Package"
+  apt:
+    name: golang-go
+    state: absent
+    purge: yes
+  become: true
+  become_method: sudo
+
+- name: "Check if Golang exists"
+  stat:
+    path: "/usr/local/go/bin/go"
+  register: golang_exists
+  changed_when: false
+
+- name: "Copying golanginstall.sh"
+  copy:
+    src: "golanginstall.sh"
+    dest: "/tmp/golanginstall.sh"
+    mode: 0755
+  when: not golang_exists.stat.exists
+
+- name: "Executing Bash Script to Install Golang"
+  shell: "/tmp/golanginstall.sh"
+  become: yes
+  when: not golang_exists.stat.exists

@@ -1,0 +1,56 @@
+- name: "Remove conflicting distro Docker packages"
+  apt:
+    name:
+      - docker.io
+      - docker-cli
+      - docker-buildx
+      - docker-compose
+    state: absent
+  become: true
+
+- name: "Remove old docker.list from the previous apt_repository task"
+  file:
+    path: /etc/apt/sources.list.d/docker.list
+    state: absent
+  become: true
+
+- name: "Ensure python3-debian is present (needed by deb822_repository)"
+  apt:
+    name: python3-debian
+    state: present
+  become: true
+
+- name: "Add Docker apt repository"
+  deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/debian
+    suites: bookworm
+    components: stable
+    architectures: arm64
+    signed_by: https://download.docker.com/linux/debian/gpg
+    state: present
+  become: true
+
+- name: "Update apt cache"
+  apt:
+    update_cache: true
+  become: true
+
+- name: "Installing Docker"
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+      - docker-buildx-plugin
+    state: present
+  become: true
+
+- name: "Adding current user to docker group"
+  user:
+    name: "{{ ansible_facts['env']['USER'] }}"
+    groups: docker
+    append: true
+  become: true

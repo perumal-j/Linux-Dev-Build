@@ -1,0 +1,159 @@
+---
+- name: "Updating Apt Cache"
+  command: apt-get update
+  become: true
+  become_method: sudo
+  changed_when: false
+
+- name: "Upgrade All Packages"
+  apt: upgrade=yes force_apt_get=yes
+  become: true
+  become_method: sudo
+
+- name: "Updating Apt Cache"
+  command: apt-get update
+  become: true
+  become_method: sudo
+  changed_when: false
+
+- name: "Installing Tools via Apt - Ubuntu x86_64"
+  package:
+    name:
+      - jq
+      - flameshot
+      - ca-certificates
+      - curl
+      - pipx
+      - sublime-text
+      - xclip
+      - remmina
+      - nautilus
+      - sqlite3
+      - python3-dev
+      - build-essential
+      - libssl-dev 
+      - libffi-dev
+      # - python3.12-dev
+      - unrar
+      - python3-pyftpdlib
+      - 7zip
+      - pkg-config
+      - libreadline-dev
+      - libncurses-dev
+      - libfuse2
+      - fonts-jetbrains-mono
+      - rdesktop
+    state: latest
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'x86_64'
+
+  
+- name: "Installing Tools via Apt - Ubuntu Aarch64"
+  package:
+    name:
+      - jq
+      - flameshot
+      - ca-certificates
+      - curl
+      - pipx
+      - sublime-text
+      - xclip
+      - remmina
+      - nautilus
+      - sqlite3
+      - python3-dev
+      - build-essential
+      - libssl-dev 
+      - libffi-dev
+      # - python3.12-dev
+      - unrar
+      - python3-pyftpdlib
+      - 7zip
+      - pkg-config
+      - libreadline-dev
+      - libncurses-dev
+      - libfuse2
+      - fonts-jetbrains-mono
+      - rdesktop
+    state: latest
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'aarch64'
+
+- name: "Installing Tools via Apt - Parrot x86_64"
+  package:
+    name:
+      - jq
+      - flameshot
+      - ca-certificates
+      - curl
+      - unrar
+      - pipx
+      - sublime-text
+      - xclip
+      - remmina
+      - nautilus
+      - sqlite3
+      - python3-dev
+      - build-essential
+      - libssl-dev 
+      - libffi-dev
+      - powershell
+      - acl
+      - gpg
+      - apt-transport-https
+      - python3-pyftpdlib
+      - pkg-config
+      - libreadline-dev
+      - libncurses-dev
+      - libfuse2
+      - fonts-jetbrains-mono
+      - rdesktop
+    state: latest
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'x86_64'
+
+- name: "Installing Tools via Apt - Parrot Aarch64"
+  package:
+    name:
+      - jq
+      - flameshot
+      - ca-certificates
+      - curl
+      - unrar
+      - pipx
+      - sublime-text
+      - xclip
+      - remmina
+      - nautilus
+      - sqlite3
+      - python3-dev
+      - build-essential
+      - libssl-dev 
+      - libffi-dev
+      # - powershell
+      - acl
+      - gpg
+      - apt-transport-https
+      - python3-pyftpdlib
+      - pkg-config
+      - libreadline-dev
+      - libncurses-dev
+      - libfuse2
+      - fonts-jetbrains-mono
+      - rdesktop
+    state: latest
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'aarch64'
+
+- name: "Remove an APT installed package"
+  apt:
+    name: ffuf
+    state: absent
+  become: true
+  become_method: sudo
+  when: ansible_facts['distribution']|lower == 'parrot'
+

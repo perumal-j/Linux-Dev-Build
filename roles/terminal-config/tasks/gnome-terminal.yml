@@ -1,0 +1,123 @@
+---
+- name: "Copy Bashrc"
+  copy:
+    src: "bashrc"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.bashrc"
+  changed_when: false
+
+- name: "Activate Modified Bashrc"
+  shell: "source {{ ansible_facts['env']['HOME'] }}/.bashrc"
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: "Copy Profile File"
+  copy:
+    src: "profile"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.profile"
+
+- name: "Ensure dconf is installed (required community.general.dconf module)"
+  package:
+    name: dconf-cli
+    state: present
+  become: true
+  become_method: sudo
+
+- name: "Generate a unique profile UUID for this host"
+  set_fact:
+    profile_uuid: "{{ (inventory_hostname ~ 'ptyxis') | to_uuid | replace('-', '') }}"
+
+- name: "Print profile UUID"
+  debug:
+    msg: "{{ profile_uuid }}"
+
+- name: "Read existing Ptyxis profile-uuids list"
+  command: "dconf read /org/gnome/Ptyxis/profile-uuids"
+  register: existing_profile_uuids
+  changed_when: false
+  failed_when: false
+
+# - name: "Parse existing profile-uuids into a clean list"
+#   set_fact:
+#     ptyxis_existing_uuids: >-
+#       {{
+#         existing_profile_uuids.stdout
+#         | regex_replace('[^A-Za-z0-9,]', '')
+#         | split(',')
+#         | select('truthy', '>', 0)
+#         | list
+#       }}
+
+- name: "Parse existing profile-uuids into a clean list"
+  set_fact:
+    ptyxis_existing_uuids: "{{ existing_profile_uuids.stdout | default('') | regex_findall('[a-f0-9]{32}') }}"
+
+- name: "Compute updated profile-uuids list (append new profile if not already present)"
+  set_fact:
+    ptyxis_profile_uuids_list: "{{ (ptyxis_existing_uuids + [profile_uuid]) | unique }}"
+
+- name: "Set Ptyxis profile-uuids list (append 'dev' profile)"
+  dconf:
+    key: "/org/gnome/Ptyxis/profile-uuids"
+    value: "{{ ptyxis_profile_uuids_list }}"
+    state: present
+
+- name: "Set Ptyxis cursor shape"
+  dconf:
+    key: "/org/gnome/Ptyxis/cursor-shape"
+    value: "'ibeam'"
+    state: present
+
+- name: "Set Ptyxis interface style"
+  dconf:
+    key: "/org/gnome/Ptyxis/interface-style"
+    value: "'dark'"
+    state: present
+
+- name: "Set Ptyxis font name"
+  dconf:
+    key: "/org/gnome/Ptyxis/font-name"
+    value: "'JetBrains Mono 20'"
+    state: present
+
+- name: "Set Ptyxis use-system-font"
+  dconf:
+    key: "/org/gnome/Ptyxis/use-system-font"
+    value: "false"
+    state: present
+
+- name: "Set Ptyxis window size"
+  dconf:
+    key: "/org/gnome/Ptyxis/window-size"
+    value: "(uint32 131, uint32 31)"
+    state: present
+
+- name: "Set Ptyxis profile - bold-is-bright"
+  dconf:
+    key: "/org/gnome/Ptyxis/Profiles/{{ profile_uuid }}/bold-is-bright"
+    value: "true"
+    state: present
+
+- name: "Set Ptyxis profile - label"
+  dconf:
+    key: "/org/gnome/Ptyxis/Profiles/{{ profile_uuid }}/label"
+    value: "'dev'"
+    state: present
+
+- name: "Set Ptyxis profile - opacity"
+  dconf:
+    key: "/org/gnome/Ptyxis/Profiles/{{ profile_uuid }}/opacity"
+    value: "1.0"
+    state: present
+
+- name: "Set Ptyxis profile - palette"
+  dconf:
+    key: "/org/gnome/Ptyxis/Profiles/{{ profile_uuid }}/palette"
+    value: "'Monokai Soda'"
+    state: present
+
+- name: "Make 'dev' the default Ptyxis profile"
+  dconf:
+    key: "/org/gnome/Ptyxis/default-profile-uuid"
+    value: "'{{ profile_uuid }}'"
+    state: present

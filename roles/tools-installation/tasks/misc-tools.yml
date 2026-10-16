@@ -1,0 +1,73 @@
+---
+- name: "Check the existence of wsgidav"
+  stat:
+    path: "/usr/local/bin/wsgidav"
+  register: wsgidav_exists
+  changed_when: false
+
+- name: "Refreshing .bashrc"
+  shell: ". {{ ansible_facts['env']['HOME'] }}/.bashrc"
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: "Check that the wsgidav environment is healthy"
+  command: 
+    argv:
+      - "{{ ansible_facts['env']['HOME'] }}/.local/share/uv/tools/wsgidav/bin/python"
+      - -c
+      - import wsgidav, cheroot, lxml
+  register: wsgidav_env_check
+  ignore_errors: true
+  when: wsgidav_exists.stat.exists
+
+- name: "Install wsgidav with cheroot and lxml"
+  command: "uv tool install wsgidav --with cheroot --with lxml"
+  environment:
+    UV_TOOL_BIN_DIR: "{{ temp_wsgi_dir }}"
+  when: not wsgidav_env_check.rc == 0 and not wsgidav_exists.stat.exists
+
+- name: "Locate all generated wsgidav executables"
+  find:
+    paths: "{{ temp_wsgi_dir }}"
+    file_type: any
+  register: found_executables
+
+- name: "Move wsgidav binaries to /usr/local/bin with root privileges"
+  copy:
+    src: "{{ item.path }}"
+    dest: "{{ temp_wsgi_dir }}/{{ item.path | basename }}"
+    remote_src: true
+    mode: '0755'
+    owner: "{{ ansible_facts['env']['USER'] }}"
+    group: "{{ ansible_facts['env']['USER'] }}"
+  loop: "{{ found_executables.files }}"
+  become: true
+  become_method: sudo
+
+- name: Clean up temporary extraction folder
+  file:
+    path: "{{ temp_wsgi_dir }}"
+    state: absent
+
+- name: "Check for the presence of Devin CLI"
+  stat:
+    path: "{{ ansible_facts['env']['HOME'] }}/.local/bin/devin"
+  register: devin
+  changed_when: false
+
+- name: "Install Devin CLI _ curl -fsSL https://cli.devin.ai/install.sh | bash"
+  shell: "curl -fsSL https://cli.devin.ai/install.sh | bash"
+  when: not devin.stat.exists
+
+- name: "Move Devin CLI binary to /usr/local/bin"
+  copy:
+    src: "{{ ansible_facts['env']['HOME'] }}/.local/bin/devin"
+    dest: "/usr/local/bin/devin"
+    owner: "{{ ansible_facts['env']['USER'] }}"
+    group: "{{ ansible_facts['env']['USER'] }}"
+    mode: 0755
+  become: true
+  become_method: sudo
+
+# https://windsurf.com/enterprise/account/login ---> Active Link for Windsurf Login
