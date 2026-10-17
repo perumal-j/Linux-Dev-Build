@@ -63,6 +63,3 @@
 - name: "Debug ansible_facts['distribution']"
   debug:
     msg: "ansible_facts['distribution']: {{ ansible_facts['distribution']|lower }}"
-
-
-

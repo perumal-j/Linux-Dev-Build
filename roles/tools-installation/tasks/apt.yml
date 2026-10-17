@@ -21,6 +21,7 @@
     name:
       - jq
       - flameshot
+      - hexedit
       - ca-certificates
       - curl
       - pipx
@@ -54,6 +55,7 @@
     name:
       - jq
       - flameshot
+      - hexedit
       - ca-certificates
       - curl
       - pipx
