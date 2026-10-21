@@ -82,10 +82,12 @@ parrot_apps:
 #     desktop: "{{ ansible_facts['env']['HOME'] }}/.config/mate/panel2.d/default/launchers/flameshot.desktop"
 #     id: 159
 
+
+shortcut_binding: "<Alt>a"
+new_mate_path: "/org/mate/desktop/keybindings/{{ new_slot }}/"
+
+new_gnome_path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/{{ new_slot }}/"
+new_slot: "custom6"
 shortcut_name: "flameshot"
 shortcut_command: "flameshot gui"
-shortcut_binding: "<Alt>a"
 mac_shortcut_binding: "<Primary><Alt>a"
-new_slot: "custom6"
-new_mate_path: "/org/mate/desktop/keybindings/{{ new_slot }}/"
-new_gnome_path: "/org/gnome/desktop/keybindings/{{ new_slot }}/"

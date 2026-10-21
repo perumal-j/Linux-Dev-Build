@@ -46,6 +46,7 @@
       - rdesktop
       - firefox-esr
       - locate
+      - flatpak
     state: latest
   become: true
   become_method: sudo
@@ -82,6 +83,7 @@
       - rdesktop
       - firefox-esr
       - locate
+      - flatpak
     state: latest
   become: true
   become_method: sudo
@@ -116,6 +118,8 @@
       - libfuse2
       - fonts-jetbrains-mono
       - rdesktop
+      - flatpak
+      - locate
     state: latest
   become: true
   become_method: sudo
@@ -150,6 +154,8 @@
       - libfuse2
       - fonts-jetbrains-mono
       - rdesktop
+      - flatpak
+      - locate
     state: latest
   become: true
   become_method: sudo

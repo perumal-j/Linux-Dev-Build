@@ -1,0 +1,53 @@
+---  
+# roles/desktop-customization/tasks/gnome_flameshot-gui.yml  
+- name: "Read current GNOME custom keybindings list"  
+  command: "gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings"  
+  register: "gnome_keybindings"  
+  changed_when: false  
+  failed_when: gnome_keybindings.rc != 0  
+  
+- name: "Parse existing list (empty list if none is set yet)"  
+  set_fact:  
+    gnome_keybindings_list: "{{ (gnome_keybindings.stdout | trim | from_yaml) if gnome_keybindings.stdout | trim not in ['', '@as []'] else [] }}"  
+  changed_when: false  
+  
+- name: "Check whether the custom6 slot is already taken"  
+  set_fact:  
+    gnome_new_path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/{{ new_slot }}/"  
+    gnome_slot_free: "true"  
+  changed_when: false  
+  
+- name: "Read name of existing custom6 binding to detect a real conflict"  
+  command: "gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{{ gnome_new_path }} name"  
+  register: "gnome_slot_name"  
+  changed_when: false  
+  failed_when: gnome_slot_name.rc != 0  
+  when: gnome_new_path in gnome_keybindings_list  
+  
+- name: "Fail if custom6 is already used by another shortcut"  
+  vars:  
+    quoted_name: "'{{ shortcut_name }}'"  
+  fail:  
+    msg: "{{ new_slot }} is already assigned to '{{ gnome_slot_name.stdout }}'; choose a different slot."  
+  when:  
+    - gnome_new_path in gnome_keybindings_list  
+    - gnome_slot_name.stdout | trim != quoted_name 
+  
+- name: "Set up Flameshot shortcut (only if not already present)"  
+  when: gnome_new_path not in gnome_keybindings_list  
+  block:  
+    - name: "Build merged list with the new path appended"  
+      set_fact:  
+        gnome_merged_paths: "{{ gnome_keybindings_list + [gnome_new_path] }}"  
+  
+    - name: "Write back the merged custom keybindings list"  
+      command: "gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \"{{ gnome_merged_paths }}\""  
+  
+- name: "Set the shortcut name"  
+  command: "gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{{ gnome_new_path }} name '{{ shortcut_name }}'"  
+  
+- name: "Set the shortcut command"  
+  command: "gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{{ gnome_new_path }} command '{{ shortcut_command }}'"  
+  
+- name: "Set the key binding"  
+  command: "gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{{ gnome_new_path }} binding '{{ mac_shortcut_binding }}'"

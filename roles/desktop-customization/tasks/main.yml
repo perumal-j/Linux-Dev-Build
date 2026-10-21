@@ -10,5 +10,8 @@
 - include_tasks: mate-flameshot-gui.yml
   when: ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'x86_64'
 
-- include_tasks: mac-flameshot-gui.yml
-  when: ansible_facts['distribution']|lower == 'parrot' or ansible_facts['architecture']|lower == 'aarch64'
+- include_tasks: mac-mate-flameshot-gui.yml
+  when: ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'aarch64'
+
+- include_tasks: mac-gnome-flameshot-gui.yml
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'aarch64'
