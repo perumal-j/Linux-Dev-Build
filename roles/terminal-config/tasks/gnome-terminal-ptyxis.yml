@@ -121,3 +121,4 @@
     key: "/org/gnome/Ptyxis/default-profile-uuid"
     value: "'{{ profile_uuid }}'"
     state: present
+

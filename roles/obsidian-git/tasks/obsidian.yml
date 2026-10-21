@@ -52,14 +52,11 @@
   register: obsidian_version_file
   changed_when: false
 
-- name: "Writing Current Version of Obsidian to file /opt/current_versions/obsidian_current_version.txt"
-  copy:
-    dest: "/opt/current_versions/obsidian_current_version.txt"
-    content: "{{ obsidian_latest_version }}"
-    mode: "0644"
-  become: true
-  become_method: sudo
-  when: not obsidian_version_file.stat.exists
+- name: "Check the presence of /usr/local/bin/obsidian"
+  stat:
+    path: /usr/local/bin/obsidian
+  register: obsidian_binary
+  changed_when: false
 
 - name: "Read Current Version of Obsidian from file /opt/current_versions/obsidian_current_version.txt"
   set_fact:
@@ -73,8 +70,7 @@
 
 - name: "Executing Bash Script to Install Obsidian"
   shell: "/tmp/obsidian-download.sh"
-  when: obsidian_update_required
-  ignore_errors: true
+  when: (obsidian_update_required | default(false)) or (not obsidian_version_file.stat.exists and not obsidian_binary.stat.exists)
 
 - name: "Store the latest version in the Current Version File"
   copy:
@@ -83,7 +79,7 @@
     mode: "0644"
   become: true
   become_method: sudo
-  when: obsidian_update_required
+  when: (obsidian_update_required | default(false)) or (not obsidian_version_file.stat.exists and not obsidian_binary.stat.exists)
 
 - name: "Check if Tech-Notes Exists"
   stat:

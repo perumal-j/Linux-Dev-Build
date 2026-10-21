@@ -114,14 +114,14 @@
   register: burpsuite_version_file
   changed_when: false
 
-- name: "Writing Current Version to file /opt/current_versions/burpsuite_current_version.txt"
-  copy:
-    dest: "/opt/current_versions/burpsuite_current_version.txt"
-    content: "{{ burpsuite_latest_version }}"
-    mode: '0644'
-  become: true
-  become_method: sudo
-  when: not burpsuite_version_file.stat.exists
+# - name: "Writing Current Version to file /opt/current_versions/burpsuite_current_version.txt"
+#   copy:
+#     dest: "/opt/current_versions/burpsuite_current_version.txt"
+#     content: "{{ burpsuite_latest_version }}"
+#     mode: '0644'
+#   become: true
+#   become_method: sudo
+#   when: not burpsuite_version_file.stat.exists
 
 - name: "Read Current Version from file /opt/current_versions/burpsuite_current_version.txt"
   set_fact:
@@ -136,6 +136,13 @@
 - name: "Print burpsuite_update_required status"
   debug:
     msg: "{{ burpsuite_update_required }}"
+  when: burpsuite_version_file.stat.exists
+
+- name: "check the existence of /opt/burpsuite.jar"
+  stat:
+    path: "/opt/burpsuite.jar"
+  register: burpsuite_jar_file
+  changed_when: false
 
 - name: "Downloading latest Burpsuite"
   get_url:
@@ -144,7 +151,7 @@
     force: yes
   become: true
   become_method: sudo
-  when: burpsuite_update_required
+  when: burpsuite_update_required or (not burpsuite_version_file.stat.exists and not burpsuite_jar_file.stat.exists)
 
 - name: "Store the Burpsuite latest version in the current version file"
   copy:
@@ -153,7 +160,7 @@
     mode: "0644"
   become: true
   become_method: sudo
-  when: burpsuite_update_required
+  when: burpsuite_update_required or (not burpsuite_version_file.stat.exists and not burpsuite_jar_file.stat.exists)
 
 - name: "Creating /usr/bin/burpsuite"
   copy:

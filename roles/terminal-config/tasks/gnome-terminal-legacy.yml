@@ -1,0 +1,83 @@
+---
+- name: "Copy Bashrc"
+  copy:
+    src: "bashrc"
+    dest: "{{ ansible_facts['user_dir'] }}/.bashrc"
+    mode: "0644"
+
+- name: "Activate Modified Bashrc"
+  shell: "source {{ ansible_facts['env']['HOME'] }}/.bashrc"
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: "Copy Profile File"
+  copy:
+    src: "profile"
+    dest: "{{ ansible_facts['user_dir'] }}/.profile"
+    mode: "0644"
+
+- name: "Install dconf, psutil and JetBrains Mono font"
+  package:
+    name:
+      - dconf-cli
+      - python3-psutil
+      - fonts-jetbrains-mono
+    state: present
+  become: true
+
+- name: "Configure GNOME Terminal (as desktop user, via session bus)"
+  vars:
+    gt_uuid: "2597fefd-3ea3-4582-8a38-7bb15124dbac"
+    gt_base: "/org/gnome/terminal/legacy/profiles:"
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts['user_uid'] }}/bus"
+  block:
+
+    - name: "Read existing GNOME Terminal profile list"
+      command: "dconf read {{ gt_base }}/list"
+      register: gt_existing_list
+      changed_when: false
+      failed_when: false
+
+    - name: "Merge our profile into the existing list (keeps other profiles)"
+      set_fact:
+        gt_profile_list: >-
+          {{ (gt_existing_list.stdout | default('')
+              | regex_findall('[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}')
+              + [gt_uuid]) | unique }}
+
+    - name: "Set GNOME Terminal profile list and default"
+      community.general.dconf:
+        key: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+      loop:
+        - { key: "{{ gt_base }}/list",    value: "{{ gt_profile_list | to_json | replace('\"', \"'\") }}" }
+        - { key: "{{ gt_base }}/default", value: "'{{ gt_uuid }}'" }
+
+    - name: "Set GNOME Terminal 'dev' profile settings"
+      community.general.dconf:
+        key: "{{ gt_base }}/:{{ gt_uuid }}/{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+      loop:
+        - { key: "visible-name",        value: "'dev'" }
+        - { key: "background-color",    value: "'rgb(0,0,0)'" }
+        - { key: "foreground-color",    value: "'rgb(255,255,255)'" }
+        - { key: "use-theme-colors",    value: "false" }
+        - { key: "cursor-blink-mode",   value: "'on'" }
+        - { key: "cursor-shape",        value: "'ibeam'" }
+        - { key: "use-system-font",     value: "false" }
+        - { key: "font",                value: "'JetBrains Mono 20'" }
+        - { key: "default-size-columns", value: "200" }
+        - { key: "default-size-rows",   value: "80" }
+        - { key: "scrollback-lines",    value: "100000" }
+        - { key: "scrollbar-policy",    value: "'never'" }
+        - key: "palette"
+          value: >-
+            ['rgb(255,255,255)', 'rgb(192,28,40)', 'rgb(38,162,105)', 'rgb(255,207,0)',
+            'rgb(18,180,137)', 'rgb(163,71,186)', 'rgb(42,161,179)', 'rgb(208,207,204)',
+            'rgb(94,92,100)', 'rgb(246,97,81)', 'rgb(51,209,122)', 'rgb(233,173,12)',
+            'rgb(42,123,222)', 'rgb(192,97,203)', 'rgb(51,199,222)', 'rgb(255,255,255)']
+

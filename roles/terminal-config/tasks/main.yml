@@ -2,5 +2,8 @@
 - include_tasks: mate-terminal.yml
   when: ansible_facts['distribution']|lower == 'parrot' or ansible_facts['distribution']|lower == 'debian'
 
-- include_tasks: gnome-terminal.yml
+- include_tasks: gnome-terminal-ptyxis.yml
   when: ansible_facts['distribution']|lower == 'ubuntu'
+
+- include_tasks: gnome-terminal-legacy.yml
+  when: ansible_facts['distribution']|lower == 'ubuntu' and ansible_facts['architecture']|lower == 'aarch64'

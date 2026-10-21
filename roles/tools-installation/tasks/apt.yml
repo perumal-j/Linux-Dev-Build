@@ -81,7 +81,7 @@
       - libfuse2
       - fonts-jetbrains-mono
       - rdesktop
-      - firefox-esr
+      # - firefox-esr
       - locate
       - flatpak
     state: latest
