@@ -58,6 +58,10 @@
 
 - name: "Install Devin CLI _ curl -fsSL https://cli.devin.ai/install.sh | bash"
   shell: "curl -fsSL https://cli.devin.ai/install.sh | bash"
+  environment:
+    CI: "true"
+  args:
+    creates: "{{ ansible_facts['env']['HOME'] }}/.local/bin/devin"
   when: not devin.stat.exists
 
 - name: "Move Devin CLI binary to /usr/local/bin"

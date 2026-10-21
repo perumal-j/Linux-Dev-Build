@@ -10,11 +10,11 @@
   changed_when: false
 
 - name: "Set up Flameshot shortcut (only if not already present)"
-  when: new_path not in custom_keybindings_list
+  when: new_gnome_path not in custom_keybindings_list
   block:
     - name: "Build merged list with the new path appended"
       set_fact:
-        merged_paths: "{{ custom_keybindings_list + [new_path] }}"
+        merged_paths: "{{ custom_keybindings_list + [new_gnome_path] }}"
 
     - name: "Write back the merged custom keybindings list"
       dconf:
@@ -24,18 +24,18 @@
       
     - name: "Set the shortcut name"
       dconf:
-        key: "{{ new_path }}name"
+        key: "{{ new_gnome_path }}name"
         value: "'{{ shortcut_name }}'"
         state: present
 
     - name: "Set the shortcut action (command to run)"
       dconf:
-        key: "{{ new_path }}action"
+        key: "{{ new_gnome_path }}action"
         value: "'{{ shortcut_command }}'"
         state: present
 
     - name: "Set the key binding"
       dconf:
-        key: "{{ new_path }}binding"
+        key: "{{ new_gnome_path }}binding"
         value: "'{{ mac_shortcut_binding }}'"
         state: present

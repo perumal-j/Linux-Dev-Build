@@ -76,6 +76,17 @@
   become_method: sudo
   when: ansible_facts['distribution']|lower == 'ubuntu' or ansible_facts['architecture']|lower == 'aarch64'
 
+- name: "create /usr/share/firefox-esr/distribution/ if it doesn't exists"
+  file:
+    path: "/usr/share/firefox-esr/distribution"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  become_method: sudo
+  when: (ansible_facts['distribution']|lower == 'parrot' and ansible_facts['architecture']|lower == 'x86_64') or ansible_facts['architecture']|lower == 'aarch64'
+
 - name: "Copying Firefox Policies"
   template:
     src: "firefox-policy.json.j2"

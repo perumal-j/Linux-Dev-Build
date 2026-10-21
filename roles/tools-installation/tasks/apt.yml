@@ -44,6 +44,8 @@
       - libfuse2
       - fonts-jetbrains-mono
       - rdesktop
+      - firefox-esr
+      - locate
     state: latest
   become: true
   become_method: sudo
@@ -78,6 +80,8 @@
       - libfuse2
       - fonts-jetbrains-mono
       - rdesktop
+      - firefox-esr
+      - locate
     state: latest
   become: true
   become_method: sudo
